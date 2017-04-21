@@ -1,0 +1,208 @@
+<div class="apidocDiv">
+<style>
+/*csslint
+*/
+.apidocDiv {
+    background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+}
+.apidocDiv a[href] {
+    color: #33f;
+    font-weight: bold;
+    text-decoration: none;
+}
+.apidocDiv a[href]:hover {
+    text-decoration: underline;
+}
+.apidocCodeCommentSpan {
+    background: #bbf;
+    color: #000;
+    display: block;
+}
+.apidocCodeKeywordSpan {
+    color: #d00;
+    font-weight: bold;
+}
+.apidocCodePre {
+    background: #eef;
+    border: 1px solid;
+    color: #777;
+    padding: 5px;
+    white-space: pre-wrap;
+}
+.apidocFooterDiv {
+    margin-top: 20px;
+    text-align: center;
+}
+.apidocModuleLi {
+    margin-top: 10px;
+}
+.apidocSectionDiv {
+    border-top: 1px solid;
+    margin-top: 20px;
+}
+.apidocSignatureSpan {
+    color: #777;
+    font-weight: bold;
+}
+</style>
+<h1>api documentation for
+    <a
+
+        href="https://github.com/nolanlawson/optimize-js#readme"
+
+    >optimize-js (v1.0.3)</a>
+</h1>
+<h4>Optimize initial JavaScript execution/parsing by wrapping eager functions</h4>
+<div class="apidocSectionDiv"><a
+    href="#apidoc.tableOfContents"
+    id="apidoc.tableOfContents"
+><h1>table of contents</h1></a><ol>
+
+    <li class="apidocModuleLi"><a href="#apidoc.module.optimize-js">module optimize-js</a><ol>
+
+        <li>
+
+            <a class="apidocElementLiA" href="#apidoc.element.optimize-js.optimize-js">
+            function <span class="apidocSignatureSpan"></span>optimize-js
+            <span class="apidocSignatureSpan">(jsString, opts)</span>
+            </a>
+
+        </li>
+
+    </ol></li>
+
+</ol></div>
+
+<div class="apidocSectionDiv">
+<h1><a href="#apidoc.module.optimize-js" id="apidoc.module.optimize-js">module optimize-js</a></h1>
+
+
+    <h2>
+        <a href="#apidoc.element.optimize-js.optimize-js" id="apidoc.element.optimize-js.optimize-js">
+        function <span class="apidocSignatureSpan"></span>optimize-js
+        <span class="apidocSignatureSpan">(jsString, opts)</span>
+        </a>
+    </h2>
+    <ul>
+    <li>description and source-code<pre class="apidocCodePre">function optimizeJs(jsString, opts) {
+  opts = opts || {}
+  var ast = acorn.parse(jsString)
+  var magicString = new MagicString(jsString)
+
+  walk(ast, {
+    enter: function (node, parent) {
+      // estree-walker does not automatically add a parent node pointer to nodes,
+      // which we need for some of our context checks below.
+      // normally I would just write &#x22;node.parentNode = parent&#x22; here, but that makes
+      // estree-walker think that parentNode is a child node of the node, which leads to
+      // infinite loops as it walks a circular tree. if we make parent a function, though,
+      // estree-walker does not follow the link.
+      node.parent = function () {
+        return parent
+      }
+       // assuming this node is an argument to a function or an element in an array,
+       // return true if it itself is already padded with parentheses
+      function isPaddedArgument (node) {
+        var parentArray = node.parent().arguments ? node.parent().arguments : node.parent().elements
+        var idx = parentArray.indexOf(node)
+        if (idx === 0) { // first arg
+          if (prePreChar === &#x27;(&#x27; &#x26;&#x26; preChar === &#x27;(&#x27; &#x26;&#x26; postChar === &#x27;)&#x27;) { // already padded
+            return true
+          }
+        } else if (idx === parentArray.length - 1) { // last arg
+          if (preChar === &#x27;(&#x27; &#x26;&#x26; postChar === &#x27;)&#x27; &#x26;&#x26; postPostChar === &#x27;)&#x27;) { // already padded
+            return true
+          }
+        } else { // middle arg
+          if (preChar === &#x27;(&#x27; &#x26;&#x26; postChar === &#x27;)&#x27;) { // already padded
+            return true
+          }
+        }
+        return false
+      }
+
+      function isNumeric (str) {
+        return /^[0-9]+$/.test(str)
+      }
+
+      function isCallExpression (node) {
+        return node &#x26;&#x26; node.type === &#x27;CallExpression&#x27;
+      }
+
+      function isArrayExpression (node) {
+        return node &#x26;&#x26; node.type === &#x27;ArrayExpression&#x27;
+      }
+
+      function isElementOfArray (node) {
+        return isArrayExpression(node.parent()) &#x26;&#x26;
+          node.parent().elements.indexOf(node) !== -1
+      }
+
+      // returns true iff node is an argument to a function call expression.
+      function isArgumentToFunctionCall (node) {
+        return isCallExpression(node.parent()) &#x26;&#x26;
+          node.parent().arguments.length &#x26;&#x26;
+          node.parent().arguments.indexOf(node) !== -1
+      }
+
+      function isValueOfObjectLiteralWithNumericName (node) {
+        return node &#x26;&#x26;
+          node.parent() &#x26;&#x26;
+          node.parent().type === &#x27;Property&#x27; &#x26;&#x26;
+          node.parent().key &#x26;&#x26;
+          node.parent().key.type === &#x27;Literal&#x27; &#x26;&#x26;
+          node.parent().key.raw &#x26;&#x26;
+          isNumeric(node.parent().key.raw) &#x26;&#x26;
+          node.parent().value === node &#x26;&#x26;
+          node.parent().parent() &#x26;&#x26;
+          node.parent().parent().type === &#x27;ObjectExpression&#x27;
+      }
+
+      // returns true iff node is an IIFE.
+      function isIIFE (node) {
+        return node &#x26;&#x26;
+          node.type === &#x27;FunctionExpression&#x27; &#x26;&#x26;
+          isCallExpression(node.parent()) &#x26;&#x26;
+          node.parent().callee === node
+      }
+
+      // returns true iff this is an IIFE call expression
+      function isIIFECall (node) {
+        return node &#x26;&#x26;
+          isCallExpression(node) &#x26;&#x26;
+          node.callee &#x26;&#x26;
+          node.callee.type === &#x27;FunctionExpression&#x27;
+      }
+
+      // tries to divine if this function is a webpack module wrapper.
+      // returns true iff node is an element of an array literal which is in turn
+      // an argument to a function call expression, and that function call
+      // expression is an IIFE.
+      function isProbablyWebpackModule (node) {
+        return isElementOfArray(node) &#x26;&#x26;
+          isArgumentToFunctionCall(node.parent()) &#x26;&#x26;
+          isIIFECall(node.parent().parent())
+      }
+
+      function isProbablyBrowserifyModule (node) {
+        return isElementOfArray(node) &#x26;&#x26;
+          isValueOfObjectLiteralWithNumericName(node.parent()) &#x26;&#x26;
+          isArgumentToFunctionCall(node.parent().parent().parent()) &#x26;&#x26;
+          isIIFECall(node.parent().parent().parent().parent())
+      }
+
+      if (node.type === &#x27;FunctionExpression&#x27;) {
+        var prePreChar = ...</pre></li>
+    <li>example usage<pre class="apidocCodePre">n/a</pre></li>
+    </ul>
+
+
+</div>
+
+<div class="apidocFooterDiv">
+    [ this document was created with
+    <a href="https://github.com/kaizhu256/node-utility2" target="_blank">utility2</a>
+    ]
+</div>
+</div>
